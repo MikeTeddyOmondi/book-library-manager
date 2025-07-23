@@ -4,6 +4,8 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 import http from "http";
+import axios from "axios";
+import mime from "mime-types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -266,6 +268,100 @@ program
       console.log();
     } catch (error) {
       console.error("❌ Error getting statistics:", error.message);
+    }
+  });
+
+// Upload file for a book
+program
+  .command("upload <book-id> <file-path>")
+  .description("Upload a file for a specific book")
+  .action(async (bookId, filePath) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.log(`❌ File not found: ${filePath}`);
+        return;
+      }
+
+      const filename = path.basename(filePath);
+      const contentType = mime.lookup(filePath) || "application/octet-stream";
+
+      const apiUrl = "http://localhost:3000/api/upload-url";
+      const response = await axios.post(apiUrl, {
+        bookId: bookId,
+        filename: filename,
+        contentType: contentType,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.error);
+      }
+
+      const { uploadUrl, objectName, method, headers } = response.data;
+
+      const fileStream = fs.createReadStream(filePath);
+      const uploadResponse = await axios({
+        method: method,
+        url: uploadUrl,
+        data: fileStream,
+        headers: headers,
+      });
+
+      if (uploadResponse.status === 200) {
+        console.log(`✅ File uploaded successfully: ${filename}`);
+
+        const registerUrl = "http://localhost:3000/api/files";
+        const registerResponse = await axios.post(registerUrl, {
+          bookId: bookId,
+          filename: filename,
+          objectName: objectName,
+        });
+
+        if (registerResponse.data.success) {
+          console.log(
+            `✅ File registered successfully with ID: ${registerResponse.data.fileId}`
+          );
+        } else {
+          throw new Error(registerResponse.data.error);
+        }
+      } else {
+        throw new Error(`Upload failed with status ${uploadResponse.status}`);
+      }
+    } catch (error) {
+      console.error("❌ Error uploading file:", error.message);
+    }
+  });
+
+// List files for a book
+program
+  .command("files <book-id>")
+  .description("List files for a specific book")
+  .action(async (bookId) => {
+    try {
+      const apiUrl = `http://localhost:3000/api/books/${bookId}/files`;
+      const response = await axios.get(apiUrl);
+
+      if (response.data.success) {
+        const files = response.data.data;
+        if (files.length === 0) {
+          console.log(`📚 No files found for book ID ${bookId}.`);
+          return;
+        }
+
+        console.log(`\n📁 Files for book ID ${bookId}:\n`);
+        console.log("ID".padEnd(4) + "Filename".padEnd(30) + "Object Name");
+        console.log("-".repeat(50));
+        files.forEach((file) => {
+          const id = file.id.toString().padEnd(4);
+          const filename = file.filename.substring(0, 28).padEnd(30);
+          const objectName = file.object_name;
+          console.log(`${id}${filename}${objectName}`);
+        });
+        console.log();
+      } else {
+        throw new Error(response.data.error);
+      }
+    } catch (error) {
+      console.error("❌ Error listing files:", error.message);
     }
   });
 

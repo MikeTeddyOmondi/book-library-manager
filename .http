@@ -6,6 +6,14 @@ curl -X POST http://localhost:3000/api/books \
   -H "Content-Type: application/json" \
   -d '{"title":"1984","author":"George Orwell","genre":"Dystopian Fiction","publishedYear":1949}'
 
+### Get presigned URL
+curl -X POST http://localhost:3000/api/upload-url \
+  -H "Content-Type: application/json" \
+  -d '{"bookId":1,"filename":"gatsby.pdf","contentType":"application/pdf"}'
+
+### List files
+curl http://localhost:3000/api/books/1/files
+
 ### Update Book
 curl -X PUT http://localhost:3000/api/books/1 \
   -H "Content-Type: application/json" \

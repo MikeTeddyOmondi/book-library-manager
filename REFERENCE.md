@@ -4,7 +4,7 @@
 
 ## Documentation
 
-A comprehensive book library management system with both REST API and CLI interface built with Express.js, Commander.js, and SQLite. This system provides complete CRUD operations through both web API endpoints and command-line interface, including server management capabilities.
+A comprehensive book library management system with both REST API and CLI interface built with Express.js, Commander.js, and SQLite. This system provides complete CRUD operations through both web API endpoints and command-line interface, including server management and file upload capabilities using Minio with presigned URLs.
 
 ## Table of Contents
 
@@ -29,18 +29,23 @@ A comprehensive book library management system with both REST API and CLI interf
 - **PUT** `/api/books/:id` - Update existing book
 - **DELETE** `/api/books/:id` - Delete book
 - **GET** `/api/books/search/:query` - Search books by title, author, or genre
+- **POST** `/api/upload-url` - Generate presigned URL for file upload
+- **POST** `/api/files` - Register uploaded file
+- **GET** `/api/books/:id/files` - List files for a book
 - **GET** `/api/health` - Health check endpoint
 
 ### CLI Interface
 
 - **Server Management**: Start, stop, restart, and monitor API server
 - **Book Operations**: Complete CRUD operations via command line
+- **File Operations**: Upload and list files associated with books
 - **Search & Analytics**: Search books and view library statistics
 - **Interactive Features**: Confirmation prompts and formatted output
 
 ### Technical Features
 
 - SQLite database with automatic initialization
+- Minio integration for file storage using presigned URLs
 - CORS enabled for cross-origin requests
 - Security headers with Helmet.js
 - Request logging with Morgan
@@ -52,7 +57,7 @@ A comprehensive book library management system with both REST API and CLI interf
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js (v18 or higher)
 - npm or yarn
 
 ### Setup Steps
@@ -60,8 +65,8 @@ A comprehensive book library management system with both REST API and CLI interf
 1. **Create project directory and navigate to it:**
 
 ```bash
-mkdir book-library-system
-cd book-library-system
+mkdir book-library-manager
+cd book-library-manager
 ```
 
 2. **Create package.json:**
@@ -103,10 +108,22 @@ cd book-library-system
 npm install
 ```
 
-4. **Create the application files** (server.js, database.js, cli.js - see File Structure section)
-  
-5. **Optional: Install globally for system-wide CLI access:**
-  
+4. Set up environment variables for Minio:
+
+Create a .env file or set these variables:
+
+```
+MINIO_ENDPOINT=localhost
+MINIO_PORT=9000
+MINIO_USE_SSL=false
+MINIO_ACCESS_KEY=your-access-key
+MINIO_SECRET_KEY=your-secret-key
+MINIO_BUCKET=library-files
+```
+
+5. **Create the application files** (server.js, database.js, cli.js - see File Structure section)
+
+6. **Optional: Install globally for system-wide CLI access:**
 
 ```bash
 npm install -g .
@@ -137,14 +154,25 @@ curl -X POST http://localhost:3000/api/books \
   -d '{"title":"Pride and Prejudice","author":"Jane Austen","genre":"Romance","publishedYear":1813}'
 ```
 
-### 3. List books
+### 3. Upload a file for a book
 
 ```bash
-# Using CLI
+# Upload a file for book ID 1
+node cli.js upload 1 /path/to/example.pdf
+```
+
+### 4. List books
+
+```bash
+# List books using CLI
 node cli.js list
+
+# List files for a book
+node cli.js files 1
 
 # Using API
 curl http://localhost:3000/api/books
+curl http://localhost:3000/api/books/1/files
 ```
 
 ## API Documentation
@@ -216,11 +244,11 @@ Create a new book.
 
 ```json
 {
-  "title": "Book Title",      // Required
-  "author": "Author Name",    // Required
+  "title": "Book Title", // Required
+  "author": "Author Name", // Required
   "isbn": "978-1-234-56789-0", // Optional
-  "publishedYear": 2024,      // Optional
-  "genre": "Fiction"          // Optional
+  "publishedYear": 2024, // Optional
+  "genre": "Fiction" // Optional
 }
 ```
 
@@ -316,6 +344,80 @@ Health check endpoint.
   "success": true,
   "message": "Library API is running",
   "timestamp": "2024-01-15T10:30:00.000Z"
+}
+```
+
+#### POST /upload-url
+
+Generate a presigned URL for uploading a file to Minio.
+
+**Request Body:**
+
+```json
+{
+  "bookId": 1,
+  "filename": "example.txt",
+  "contentType": "text/plain"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "uploadUrl": "https://minio.example.com/library-files/books/1/example.txt?X-Amz-...",
+  "objectName": "books/1/example.txt",
+  "method": "PUT",
+  "headers": {
+    "Content-Type": "text/plain"
+  }
+}
+```
+
+#### POST /files
+
+Register an uploaded file in the database.
+
+**Request Body:**
+
+```json
+{
+  "bookId": 1,
+  "filename": "example.txt",
+  "objectName": "books/1/example.txt"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "fileId": 1,
+  "message": "File registered successfully"
+}
+```
+
+#### GET /books/:id/files
+
+List files associated with a book.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "book_id": 1,
+      "filename": "example.pdf",
+      "object_name": "books/1/example.pdf",
+      "created_at": "2024-01-15T10:35:00.000Z"
+    }
+  ],
+  "count": 1
 }
 ```
 
@@ -588,6 +690,35 @@ Books by Genre:
   Unknown: 1
 ```
 
+#### library upload
+
+Upload a file for a specific book.
+
+**Examples:**
+
+```bash
+library upload 1 /path/to/example.pdf
+```
+
+#### library files
+
+List files for a specific book.
+
+**Examples:**
+
+```bash
+library files 1
+```
+
+**Output:**
+
+```
+📁 Files for book ID 1:
+ID   Filename                      Object Name
+--------------------------------------------------
+1    example.txt                   books/1/example.txt
+```
+
 ### Global CLI Options
 
 All CLI commands support these global options:
@@ -617,6 +748,15 @@ CREATE TABLE books (
   genre TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  filename TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (book_id) REFERENCES books(id)
 );
 ```
 
@@ -692,22 +832,28 @@ library add -t "The Great Gatsby" -a "F. Scott Fitzgerald" -g "Classic" -y 1925
 library add -t "Dune" -a "Frank Herbert" -g "Science Fiction" -y 1965
 library add -t "The Catcher in the Rye" -a "J.D. Salinger" -g "Fiction" -y 1951
 
-# 4. List all books
+# 4. Upload a file
+library upload 1 /path/to/gatsby.pdf
+
+# 5. List files
+library files 1
+
+# 6. List all books
 library list
 
-# 5. Search for books
+# 7. Search for books
 library search "Fiction"
 
-# 6. View specific book
+# 8. View specific book
 library view 1
 
-# 7. Update a book
+# 9. Update a book
 library update 1 -g "American Literature"
 
-# 8. Show statistics
+# 10. Show statistics
 library stats
 
-# 9. Stop the server
+# 11. Stop the server
 library server stop
 ```
 
@@ -733,6 +879,19 @@ curl -X POST http://localhost:3000/api/books \
     "isbn": "978-0-547-92822-7"
   }'
 
+# Get presigned URL
+curl -X POST http://localhost:3000/api/upload-url \
+  -H "Content-Type: application/json" \
+  -d '{"bookId":1,"filename":"gatsby.pdf","contentType":"application/pdf"}'
+
+# Register uploaded file
+curl -X POST http://localhost:3000/api/files \
+  -H "Content-Type: application/json" \
+  -d '{"bookId":1,"filename":"gatsby.pdf","objectName":"books/1/gatsby.pdf"}'
+
+# List files
+curl http://localhost:3000/api/books/1/files
+
 # Update a book
 curl -X PUT http://localhost:3000/api/books/1 \
   -H "Content-Type: application/json" \
@@ -749,22 +908,23 @@ curl -X DELETE http://localhost:3000/api/books/1
 
 ```javascript
 // Get all books
-const books = await fetch('http://localhost:3000/api/books')
-  .then(res => res.json());
+const books = await fetch("http://localhost:3000/api/books").then((res) =>
+  res.json()
+);
 
 // Add a book
-const newBook = await fetch('http://localhost:3000/api/books', {
-  method: 'POST',
+const newBook = await fetch("http://localhost:3000/api/books", {
+  method: "POST",
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
-    title: 'Brave New World',
-    author: 'Aldous Huxley',
-    genre: 'Dystopian Fiction',
-    publishedYear: 1932
-  })
-}).then(res => res.json());
+    title: "Brave New World",
+    author: "Aldous Huxley",
+    genre: "Dystopian Fiction",
+    publishedYear: 1932,
+  }),
+}).then((res) => res.json());
 ```
 
 #### Using Python requests
@@ -806,6 +966,12 @@ library server start
 
 - `PORT` - Server port (default: 3000)
 - `NODE_ENV` - Environment mode (development/production)
+- `MINIO_ENDPOINT` - Minio server endpoint
+- `MINIO_PORT` - Minio server port
+- `MINIO_USE_SSL` - Use SSL for Minio (true/false)
+- `MINIO_ACCESS_KEY` - Minio access key
+- `MINIO_SECRET_KEY` - Minio secret key
+- `MINIO_BUCKET` - Minio bucket name
 
 ### Adding New Features
 
@@ -915,6 +1081,16 @@ node cli.js server start
 - Verify the correct port is being used
 - Check firewall settings
 
+#### Minio connection errors
+
+- Verify Minio server is running and environment variables are set correctly.
+- Check network connectivity to Minio endpoint.
+
+#### File upload fails
+
+- Ensure the file path is correct and accessible.
+- Check Minio bucket permissions.
+
 ### Logging and Debugging
 
 #### Server Logs
@@ -982,7 +1158,7 @@ For issues, questions, or contributions:
 
 ## Source
 
-```js
+````js
 // package.json
 {
   "name": "book-library-manager",
@@ -1285,7 +1461,7 @@ class Database {
     return new Promise((resolve, reject) => {
       const { title, author, isbn, publishedYear, genre } = book;
       const query = `
-        UPDATE books 
+        UPDATE books
         SET title = COALESCE(?, title),
             author = COALESCE(?, author),
             isbn = COALESCE(?, isbn),
@@ -1316,7 +1492,7 @@ class Database {
   searchBooks(query) {
     return new Promise((resolve, reject) => {
       const searchQuery = `
-        SELECT * FROM books 
+        SELECT * FROM books
         WHERE title LIKE ? OR author LIKE ? OR genre LIKE ?
         ORDER BY created_at DESC
       `;
@@ -1837,7 +2013,7 @@ A complete book library management system with both REST API and CLI interface b
 
 ### REST API
 - **GET** `/api/books` - Get all books
-- **GET** `/api/books/:id` - Get book by ID  
+- **GET** `/api/books/:id` - Get book by ID
 - **POST** `/api/books` - Create new book
 - **PUT** `/api/books/:id` - Update book
 - **DELETE** `/api/books/:id` - Delete book
@@ -1861,20 +2037,19 @@ npm install
 ````
 
 2. Start the API server:
-  
-  ```bash
-  npm start
-  # or for development
-  npm run dev
-  ```
-  
+
+```bash
+npm start
+# or for development
+npm run dev
+```
+
 3. Use the CLI:
-  
-  ```bash
-  # Add to PATH or use directly
-  node cli.js --help
-  ```
-  
+
+```bash
+# Add to PATH or use directly
+node cli.js --help
+```
 
 # Or if installed globally
 
@@ -1951,6 +2126,8 @@ CREATE TABLE books (
 ## License
 
 MIT
-*/
+\*/
+
+```
 
 ```

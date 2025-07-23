@@ -1,6 +1,6 @@
 # Book Library Management System
 
-A complete book library management system with both REST API and CLI interface built with Express.js, Commander.js, and SQLite.
+A complete book library management system with both REST API and CLI interface built with Express.js, Commander.js, and SQLite. This system provides complete CRUD operations for books and file upload capabilities using Minio with presigned URLs.
 
 ## Features
 
@@ -12,7 +12,10 @@ A complete book library management system with both REST API and CLI interface b
 - **PUT** `/api/books/:id` - Update book
 - **DELETE** `/api/books/:id` - Delete book
 - **GET** `/api/books/search/:query` - Search books
-- **GET** `/api/health` - Health check
+- **POST** `/api/upload-url` - Generate presigned URL for file upload
+- **POST** `/api/files` - Register uploaded file
+- **GET** `/api/books/:id/files` - List files for a book
+- **GET** `/api/health` - Health check endpoint
 
 ### CLI Interface
 
@@ -65,6 +68,19 @@ curl -X POST http://localhost:3000/api/books \
   -H "Content-Type: application/json" \
   -d '{"title":"1984","author":"George Orwell","genre":"Dystopian Fiction","publishedYear":1949}'
 
+# Get presigned URL
+curl -X POST http://localhost:3000/api/upload-url \
+  -H "Content-Type: application/json" \
+  -d '{"bookId":1,"filename":"gatsby.pdf","contentType":"application/pdf"}'
+
+# Register uploaded file
+curl -X POST http://localhost:3000/api/files \
+  -H "Content-Type: application/json" \
+  -d '{"bookId":1,"filename":"gatsby.pdf","objectName":"books/1/gatsby.pdf"}'
+
+# List files
+curl http://localhost:3000/api/books/1/files
+
 # Update a book
 curl -X PUT http://localhost:3000/api/books/1 \
   -H "Content-Type: application/json" \
@@ -76,6 +92,12 @@ curl -X PUT http://localhost:3000/api/books/1 \
 ```bash
 # Add a book
 library add -t "To Kill a Mockingbird" -a "Harper Lee" -g "Fiction" -y 1960
+
+# Upload a file
+library upload 1 /path/to/gatsby.pdf
+
+# List files
+library files 1
 
 # List all books
 library list
@@ -108,6 +130,15 @@ CREATE TABLE books (
   genre TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  filename TEXT NOT NULL,
+  object_name TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (book_id) REFERENCES books(id)
 );
 ```
 

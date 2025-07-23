@@ -1,6 +1,7 @@
-import sqlite3pkg from "sqlite3";
-const sqlite3 = sqlite3pkg.verbose();
 import path from "path";
+import SQLite3 from "sqlite3";
+
+const sqlite3 = SQLite3.verbose();
 
 class Database {
   constructor(dbPath = "./library.db") {
@@ -23,11 +24,30 @@ class Database {
       )
     `;
 
+    const createFilesTableQuery = `
+      CREATE TABLE IF NOT EXISTS files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        object_name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (book_id) REFERENCES books(id)
+      )
+    `;
+
     this.db.run(createTableQuery, (err) => {
       if (err) {
         console.error("Error creating books table:", err);
       } else {
         console.log("📊 Database initialized successfully");
+      }
+    });
+
+    this.db.run(createFilesTableQuery, (err) => {
+      if (err) {
+        console.error("Error creating files table:", err);
+      } else {
+        console.log("📊 Files table initialized successfully");
       }
     });
   }
@@ -124,6 +144,35 @@ class Database {
       this.db.all(
         searchQuery,
         [searchTerm, searchTerm, searchTerm],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+  }
+
+  // Create file record
+  createFile(fileData) {
+    const { bookId, filename, objectName } = fileData;
+    const query = `
+      INSERT INTO files (book_id, filename, object_name)
+      VALUES (?, ?, ?)
+    `;
+    return new Promise((resolve, reject) => {
+      this.db.run(query, [bookId, filename, objectName], function (err) {
+        if (err) reject(err);
+        else resolve(this.lastID);
+      });
+    });
+  }
+
+  // Get files by book ID
+  getFilesByBookId(bookId) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        "SELECT * FROM files WHERE book_id = ?",
+        [bookId],
         (err, rows) => {
           if (err) reject(err);
           else resolve(rows);

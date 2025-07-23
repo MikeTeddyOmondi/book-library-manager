@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import { Client } from "minio";
 import Database from "./database.js";
 
 const app = express();
@@ -9,6 +10,32 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize database
 const db = new Database();
+
+// Initialize Minio client
+const minioClient = new Client({
+  endPoint: process.env.MINIO_ENDPOINT || "localhost",
+  port: parseInt(process.env.MINIO_PORT) || 9000,
+  useSSL: process.env.MINIO_USE_SSL === "true",
+  accessKey: process.env.MINIO_ACCESS_KEY,
+  secretKey: process.env.MINIO_SECRET_KEY,
+});
+
+const bucketName = process.env.MINIO_BUCKET || "library-files";
+
+// Ensure Minio bucket exists
+async function ensureBucketExists() {
+  try {
+    const exists = await minioClient.bucketExists(bucketName);
+    if (!exists) {
+      await minioClient.makeBucket(bucketName, "us-east-1");
+      console.log(`Bucket ${bucketName} created successfully.`);
+    }
+  } catch (error) {
+    console.error("Error ensuring bucket exists:", error);
+  }
+}
+
+ensureBucketExists();
 
 // Middleware
 app.use(helmet());
@@ -162,6 +189,98 @@ app.get("/api/books/search/:query", async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+    });
+  }
+});
+
+// Get presigned URL for file upload
+app.post('/api/upload-url', async (req, res) => {
+  try {
+    const { bookId, filename, contentType } = req.body;
+    if (!bookId || !filename || !contentType) {
+      return res.status(400).json({
+        success: false,
+        error: 'bookId, filename, and contentType are required'
+      });
+    }
+
+    const book = await db.getBookById(bookId);
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        error: 'Book not found'
+      });
+    }
+
+    const objectName = `books/${bookId}/${filename}`;
+    const expires = 60 * 5; // 5 minutes
+    const url = await minioClient.presignedPutObject(bucketName, objectName, expires);
+
+    res.json({
+      success: true,
+      uploadUrl: url,
+      objectName: objectName,
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Register uploaded file
+app.post('/api/files', async (req, res) => {
+  try {
+    const { bookId, filename, objectName } = req.body;
+    if (!bookId || !filename || !objectName) {
+      return res.status(400).json({
+        success: false,
+        error: 'bookId, filename, and objectName are required'
+      });
+    }
+
+    const book = await db.getBookById(bookId);
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        error: 'Book not found'
+      });
+    }
+
+    const fileId = await db.createFile({ bookId, filename, objectName });
+
+    res.status(201).json({
+      success: true,
+      fileId: fileId,
+      message: 'File registered successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// List files for a book
+app.get('/api/books/:id/files', async (req, res) => {
+  try {
+    const bookId = req.params.id;
+    const files = await db.getFilesByBookId(bookId);
+    res.json({
+      success: true,
+      data: files,
+      count: files.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
