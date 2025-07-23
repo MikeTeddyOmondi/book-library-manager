@@ -1,0 +1,13 @@
+### List Books
+curl http://localhost:3000/api/books
+
+### Add Book
+curl -X POST http://localhost:3000/api/books \
+  -H "Content-Type: application/json" \
+  -d '{"title":"1984","author":"George Orwell","genre":"Dystopian Fiction","publishedYear":1949}'
+
+### Update Book
+curl -X PUT http://localhost:3000/api/books/1 \
+  -H "Content-Type: application/json" \
+  -d '{"genre":"Classic Literature"}'
+
