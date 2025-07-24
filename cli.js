@@ -273,8 +273,8 @@ program
 
 // Upload file for a book
 program
-  .command("upload <book-id> <file-path>")
-  .description("Upload a file for a specific book")
+  .command('upload <book-id> <file-path>')
+  .description('Upload a file for a specific book')
   .action(async (bookId, filePath) => {
     try {
       if (!fs.existsSync(filePath)) {
@@ -283,13 +283,14 @@ program
       }
 
       const filename = path.basename(filePath);
-      const contentType = mime.lookup(filePath) || "application/octet-stream";
+      const contentType = mime.lookup(filePath) || 'application/octet-stream';
+      const fileSize = fs.statSync(filePath).size; // Get file size for Content-Length
 
-      const apiUrl = "http://localhost:3000/api/upload-url";
+      const apiUrl = 'http://localhost:3000/api/upload-url';
       const response = await axios.post(apiUrl, {
         bookId: bookId,
         filename: filename,
-        contentType: contentType,
+        contentType: contentType
       });
 
       if (!response.data.success) {
@@ -303,23 +304,24 @@ program
         method: method,
         url: uploadUrl,
         data: fileStream,
-        headers: headers,
+        headers: {
+          ...headers,
+          'Content-Length': fileSize // Add Content-Length header
+        }
       });
 
       if (uploadResponse.status === 200) {
         console.log(`✅ File uploaded successfully: ${filename}`);
 
-        const registerUrl = "http://localhost:3000/api/files";
+        const registerUrl = 'http://localhost:3000/api/files';
         const registerResponse = await axios.post(registerUrl, {
           bookId: bookId,
           filename: filename,
-          objectName: objectName,
+          objectName: objectName
         });
 
         if (registerResponse.data.success) {
-          console.log(
-            `✅ File registered successfully with ID: ${registerResponse.data.fileId}`
-          );
+          console.log(`✅ File registered successfully with ID: ${registerResponse.data.fileId}`);
         } else {
           throw new Error(registerResponse.data.error);
         }
@@ -327,7 +329,7 @@ program
         throw new Error(`Upload failed with status ${uploadResponse.status}`);
       }
     } catch (error) {
-      console.error("❌ Error uploading file:", error.message);
+      console.error('❌ Error uploading file:', error.message);
     }
   });
 
