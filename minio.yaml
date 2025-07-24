@@ -1,0 +1,26 @@
+name: library-manager
+
+services:
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=minio
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - library-manager
+
+networks:
+  library-manager:
+    name: library-manager
+    driver: bridge
+
+volumes:
+  minio-data:
+    name: minio-data
+    driver: local

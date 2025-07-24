@@ -1,0 +1,26 @@
+name: library-manager
+
+services:
+  app:
+    build: .
+    container_name: library-manager
+    image: ranckosolutionsinc/book-library-manager:latest
+    ports:
+      - "3000:3000"
+    # volumes:
+    #   - ./data:/app/data:ro
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio}
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=library-files
+      - MINIO_REGION=sa-north-1
+    networks:
+      - library-manager
+
+networks:
+  library-manager:
+    name: library-manager
+    driver: bridge
