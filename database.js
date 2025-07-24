@@ -4,7 +4,7 @@ import SQLite3 from "sqlite3";
 const sqlite3 = SQLite3.verbose();
 
 class Database {
-  constructor(dbPath = "./library.db") {
+  constructor(dbPath = "./data/library.db") {
     this.dbPath = dbPath;
     this.db = new sqlite3.Database(dbPath);
     this.init();
